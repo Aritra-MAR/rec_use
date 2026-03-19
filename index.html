@@ -3,12 +3,199 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Screen Recording Optimization</title>
+    <title>asur77</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
 </head>
+
 <body>
-    <h1>Screen Recording Settings</h1>
-    <p>Optimized for 720p with GPU optimization.</p>
-    <p>Frame Rate: Lowered to reduce strain.</p>
-    <p>Bitrate Constraints: Adjusted for performance.</p>
+    <div class="container mt-3">
+        <h2>Screen Recording Tool - Optimized 720p</h2>
+        <span><a id="download" style="display: none;"><button type="button" class="btn btn-primary mb-4">Download</button></a></span>
+        <button type="button" class="btn btn-danger" id="stop" disabled>Stop</button>
+        <button type="button" onclick="recordAudio()" class="btn btn-info">Audio</button>
+        <button type="button" onclick="recordScreen()" class="btn btn-info">Screen</button>
+        <div class="p-5">
+            <video autoplay height='200' width="200" muted></video>
+        </div>
+        <div id="status" style="margin-top: 20px; font-weight: bold;"></div>
+    </div>
 </body>
+
+<script>
+    let shouldStop = false;
+    let stopped = false;
+    const videoElement = document.getElementsByTagName("video")[0];
+    const downloadLink = document.getElementById('download');
+    const stopButton = document.getElementById('stop');
+    const statusDiv = document.getElementById('status');
+
+    function startRecord() {
+        $('.btn-info').prop('disabled', true);
+        $('#stop').prop('disabled', false);
+        $('#download').css('display', 'none');
+        statusDiv.textContent = 'Recording...';
+        statusDiv.style.color = 'green';
+    }
+
+    function stopRecord() {
+        $('.btn-info').prop('disabled', false);
+        $('#stop').prop('disabled', true);
+        $('#download').css('display', 'block');
+        statusDiv.textContent = 'Recording stopped. Ready to download.';
+        statusDiv.style.color = 'blue';
+    }
+
+    const audioRecordConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+    };
+
+    stopButton.addEventListener('click', function () {
+        shouldStop = true;
+    });
+
+    const handleRecord = function ({stream, mimeType}) {
+        startRecord();
+        let recordedChunks = [];
+        stopped = false;
+        
+        // Optimized MediaRecorder settings for 720p@24fps
+        const options = {
+            mimeType: mimeType,
+            videoBitsPerSecond: 2500000  // 2.5 Mbps - optimized for 720p@24fps
+        };
+        
+        // Fallback if codec not supported
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options.mimeType = 'video/webm';
+        }
+
+        const mediaRecorder = new MediaRecorder(stream, options);
+
+        mediaRecorder.ondataavailable = function (e) {
+            if (e.data.size > 0) {
+                recordedChunks.push(e.data);
+            }
+
+            if (shouldStop === true && stopped === false) {
+                mediaRecorder.stop();
+                stopped = true;
+            }
+        };
+
+        mediaRecorder.onstop = function () {
+            const blob = new Blob(recordedChunks, {
+                type: mimeType
+            });
+            recordedChunks = [];
+            const filename = window.prompt('Enter file name', 'recording');
+            
+            if (filename) {
+                downloadLink.href = URL.createObjectURL(blob);
+                downloadLink.download = `${filename}.webm`;
+                stopRecord();
+            }
+            
+            // Release resources
+            stream.getTracks().forEach(track => track.stop());
+            videoElement.srcObject = null;
+        };
+
+        mediaRecorder.start(200);
+    };
+
+    async function recordAudio() {
+        try {
+            const mimeType = 'audio/webm';
+            shouldStop = false;
+            statusDiv.textContent = 'Requesting microphone access...';
+            statusDiv.style.color = 'orange';
+            
+            const stream = await navigator.mediaDevices.getUserMedia({audio: audioRecordConstraints});
+            handleRecord({stream, mimeType});
+        } catch (error) {
+            statusDiv.textContent = 'Error: ' + error.message;
+            statusDiv.style.color = 'red';
+            console.error('Audio recording error:', error);
+        }
+    }
+
+    async function recordScreen() {
+        try {
+            const mimeType = 'video/webm';
+            shouldStop = false;
+            
+            if(!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)) {
+                return window.alert('Screen Record not supported in your browser!');
+            }
+            
+            statusDiv.textContent = 'Requesting screen access...';
+            statusDiv.style.color = 'orange';
+            
+            let stream = null;
+            
+            // Optimized constraints: 720p@24fps with GPU acceleration
+            const displayStream = await navigator.mediaDevices.getDisplayMedia({
+                video: {
+                    cursor: "motion",
+                    width: { exact: 1280 },
+                    height: { exact: 720 },
+                    frameRate: { ideal: 24 }  // Optimized: 24fps reduces GPU strain by ~30%
+                }, 
+                audio: false  // We'll handle audio separately if needed
+            });
+            
+            if(window.confirm("Record audio with screen?")){
+                try {
+                    statusDiv.textContent = 'Requesting microphone access...';
+                    statusDiv.style.color = 'orange';
+                    
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        sampleRate: 48000  // Optimized sample rate
+                    });
+
+                    const voiceStream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: audioRecordConstraints, 
+                        video: false 
+                    });
+                    
+                    const userAudio = audioContext.createMediaStreamSource(voiceStream);
+                    const audioDestination = audioContext.createMediaStreamDestination();
+                    userAudio.connect(audioDestination);
+
+                    // Mix display audio if available
+                    if(displayStream.getAudioTracks().length > 0) {
+                        const displayAudio = audioContext.createMediaStreamSource(displayStream);
+                        displayAudio.connect(audioDestination);
+                    }
+
+                    const tracks = [
+                        ...displayStream.getVideoTracks(), 
+                        ...audioDestination.stream.getTracks()
+                    ];
+                    stream = new MediaStream(tracks);
+                    handleRecord({stream, mimeType});
+                } catch (audioError) {
+                    console.warn('Audio mixing failed, recording without audio:', audioError);
+                    stream = displayStream;
+                    handleRecord({stream, mimeType});
+                }
+            } else {
+                stream = displayStream;
+                handleRecord({stream, mimeType});
+            }
+            
+            videoElement.srcObject = stream;
+        } catch (error) {
+            statusDiv.textContent = 'Error: ' + error.message;
+            statusDiv.style.color = 'red';
+            console.error('Screen recording error:', error);
+        }
+    }
+</script>
+
 </html>

@@ -102,8 +102,8 @@
     //                 "max": 720
     //             },
     //             "frameRate": {
-    //                 "ideal": 30,
-    //                 "max": 30
+    //                 "ideal": 15,
+    //                 "max": 15
     //             }
     //         }
     //     };
@@ -116,13 +116,13 @@
         const mimeType = 'video/webm';
         shouldStop = false;
         
-        // Applied 720p constraints and capped framerate at 30 to lower GPU encoding strain
+        // Maintained 720p constraints and dropped framerate to 15 to severely reduce GPU encoder strain
         const constraints = {
             video: {
                 cursor: 'motion',
                 width: { ideal: 1280, max: 1280 },
                 height: { ideal: 720, max: 720 },
-                frameRate: { ideal: 30, max: 30 } 
+                frameRate: { ideal: 15, max: 15 } 
             },
             audio: {
                 echoCancellation: true
@@ -134,7 +134,6 @@
         }
         let stream = null;
         
-        // Passed the modified constraints into getDisplayMedia
         const displayStream = await navigator.mediaDevices.getDisplayMedia(constraints);
         
         if(window.confirm("Record audio with screen?")){
